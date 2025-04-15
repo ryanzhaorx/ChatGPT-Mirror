@@ -1,5 +1,8 @@
 ## 服务器部署
 
+服务器推荐：[腾讯云](https://curl.qcloud.com/0JAXkoF1) 选择欧美区域
+
+
 #### 1. 运行
 
 ```bash
@@ -15,7 +18,7 @@ cp .env.example .env && vi .env
 ./deploy.sh
 ```
 
-- 具体教程请参考：[如何安装 ChatGPT 镜像](https://dairoot.cn/2024/07/02/install-chatgpt-mirror/)。
+- 具体教程请参考：[如何安装 ChatGPT 镜像](https://www.bilibili.com/cheese/play/ss65256?bsource=link_copy)。
 
 
 2. #### 配置 nginx (可以不配置 https， 但推荐配置)
@@ -52,8 +55,16 @@ server {
     error_log /data/logs/ngx.chatgpt.error.log;
     # 日志文件 END
 
+    # 屏蔽无效文件 START
+    location ~* \.js\.map$ {
+        return 404;
+    }
+    # 屏蔽无效文件 END
+
+    client_max_body_size 50M;
     client_header_buffer_size 4k;
     large_client_header_buffers 8 16k;
+
 
 
     location / {
@@ -62,7 +73,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $http_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-Proto https;
 
         proxy_pass http://127.0.0.1:50002;
     }
@@ -93,6 +104,7 @@ server {
     error_log /data/logs/ngx.chatgpt.error.log;
     # 日志文件 END
 
+    client_max_body_size 50M;
     client_header_buffer_size 4k;
     large_client_header_buffers 8 16k;
 
@@ -119,7 +131,7 @@ server {
 
 
     # GLOBAL-CACHE START
-    location ~* \.(js|css)$ {
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff|woff2|ttf|otf|eot|svg|mp4|webm|ogg|ogv|zip|pdf)$ {
         proxy_cache newchat_cache;
         proxy_cache_valid 200 60m;   # 对状态码200的响应缓存60分钟
 

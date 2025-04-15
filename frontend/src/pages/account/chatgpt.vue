@@ -27,6 +27,7 @@
           <t-tag v-if="row.auth_status === true" theme="success" variant="light"> 运行中 </t-tag>
         </template>
 
+        <!--
         <template #use_count="{ row }">
           <t-space>
             <div v-for="(v, k) in row.use_count" :key="k">
@@ -36,10 +37,10 @@
                   <span>{{ v }}</span>
                 </t-space>
               </t-tag>
-              <!-- <t-tag theme="primary" variant="light">{{ k.toString().substring(5, 7) }}: {{ v }}</t-tag> -->
             </div>
           </t-space>
         </template>
+        -->
 
         <template #expires_at="{ row }">
           {{ TimestampToDate(row.expires_at) }}
@@ -91,6 +92,7 @@
                 <!-- or
                 <t-link target="_blank" theme="primary" size="small" :href="ChatgptTokenAuthUrl">自动获取</t-link> -->
               </span>
+              <span style="font-size: 12px; color: #888"> Refresh Token：有效期永久 </span>
             </div>
           </t-form-item>
         </t-form>
@@ -154,9 +156,9 @@ const columns: TableProps['columns'] = [
   { colKey: 'row-select', type: 'multiple' },
   { colKey: 'id', title: 'ID', width: 50 },
   { colKey: 'chatgpt_username', title: 'ChatGPT 账号', width: 220, fixed: 'left' },
-  { colKey: 'auth_status', title: '状态', width: 100 },
+  { colKey: 'auth_status', title: '状态', width: 100, fixed: 'left' },
   { colKey: 'plan_type', title: '类型', width: 100 },
-  { colKey: 'use_count', title: '近期用量', width: 350 },
+  // { colKey: 'use_count', title: '近期用量', width: 350 },
   { colKey: 'access_token_exp', title: 'Access Token 过期时间', width: 200 },
   { colKey: 'created_time', title: '创建时间', width: 200 },
   // { colKey: 'updated_at', title: '最近更新时间', width: 200 },
@@ -210,9 +212,9 @@ const addChatToken = async () => {
   if (response.status !== 200) {
     MessagePlugin.error(JSON.stringify(Object.values(data)[0]));
 
-    if (data.message.includes('status: 403')) {
-      window.location.href = '/';
-    }
+    // if (data.message.includes('status: 403')) {
+    //   window.location.href = '/';
+    // }
   } else {
     showDialog.value = false;
     await getChatGPTList();

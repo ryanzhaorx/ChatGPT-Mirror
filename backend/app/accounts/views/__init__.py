@@ -11,6 +11,7 @@ from app.chatgpt.models import ChatgptAccount
 from app.page import DefaultPageNumberPagination
 from app.settings import ADMIN_USERNAME
 from app.utils import req_gateway
+from datetime import datetime
 
 
 class GetMirrorToken(APIView):
@@ -19,8 +20,8 @@ class GetMirrorToken(APIView):
     def get(self, request):
         user = User.objects.filter(id=request.GET["user_id"]).first()
 
-        user_account_list = ChatgptAccount.get_by_gptcar_list(user.gptcar_list)
-        chatgpt_username_list = [i.chatgpt_username for i in user_account_list]
+        user_gpt_list = ChatgptAccount.get_by_gptcar_list(user.gptcar_list)
+        chatgpt_username_list = [i.chatgpt_username for i in user_gpt_list]
         res = req_gateway("post", "/api/get-mirror-token", json={
             "isolated_session": user.isolated_session,
             "limits": user.model_limit,
@@ -30,6 +31,7 @@ class GetMirrorToken(APIView):
         for line in res:
             obj = ChatgptAccount.objects.filter(chatgpt_username=line["chatgpt_username"]).first()
             line["auth_status"] = obj.auth_status
+            line["plan_type"] = obj.plan_type
         return Response(res)
 
 
@@ -38,10 +40,25 @@ class UserChatGPTAccountList(APIView):
 
     def get(self, request):
         results = []
-        user_account_list = ChatgptAccount.get_by_gptcar_list(request.user.gptcar_list)
-        for line in user_account_list:
+        user_gpt_list = ChatgptAccount.get_by_gptcar_list(request.user.gptcar_list)
+        chatgpt_list = [i.chatgpt_username for i in user_gpt_list]
+
+        try:
+            use_count_dict = req_gateway("post", "/api/get-chatgpt-use-count", json={"chatgpt_list": chatgpt_list})
+        except:
+            use_count_dict = {}
+
+        auth_user_gpt_list = [i for i in user_gpt_list if i.auth_status]
+        current_minute = datetime.now().minute
+
+        for line in auth_user_gpt_list or user_gpt_list:
+            gpt_use_count_dict = use_count_dict.get(line.chatgpt_username, {}).get("gpt-4o", {})
+            last_3h_use_count = (gpt_use_count_dict.get("last_1h", 0) +
+                          gpt_use_count_dict.get("last_2h", 0) + gpt_use_count_dict.get("last_3h", 0) +
+                          gpt_use_count_dict.get("last_4h", 0) * (1 - current_minute / 60))
             results.append({
                 "id": line.id,
+                "use_count": last_3h_use_count,
                 "chatgpt_flag": "{:03}{}".format(line.id, line.chatgpt_username[:3]),
                 "plan_type": line.plan_type,
                 "auth_status": line.auth_status,
@@ -102,12 +119,22 @@ class UserAccountView(generics.ListCreateAPIView):
         if serializer.data.get("password"):
             user.set_password(serializer.data["password"])
 
+        if "expired_date" in serializer.data.keys():
+            user.expired_date = serializer.data["expired_date"]
+
         user.gptcar_list = serializer.data["gptcar_list"]
         user.is_active = serializer.data["is_active"]
         user.model_limit = serializer.data["model_limit"]
         user.isolated_session = serializer.data["isolated_session"]
         user.remark = serializer.data["remark"]
         user.save()
+
+        if not serializer.data["is_active"]:
+            # 注销登录
+            try:
+                req_gateway("post", "/api/logout", json={"user_name": serializer.data["username"]})
+            except:
+                pass
 
         return Response({"message": "添加成功"})
 

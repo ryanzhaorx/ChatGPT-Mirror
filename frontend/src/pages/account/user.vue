@@ -72,24 +72,7 @@
         :cancel-btn="null"
         :confirm-btn="null"
       >
-        <!-- tableChatgptDetailsData -->
-        <t-table
-          :data="tableChatgptDetailsData"
-          :columns="columnsChatgptDetails"
-          row-key="chatgpt_username"
-          :loading="tableLoading"
-          bordered
-          hover
-        >
-          <template #auth_status="{ row }">
-            <t-tag v-if="row.auth_status === false" theme="danger" variant="light"> 已过期 </t-tag>
-            <t-tag v-if="row.auth_status === true" theme="success" variant="light"> 运行中 </t-tag>
-          </template>
-
-          <template #op="slotProps">
-            <t-link theme="primary" @click="handleCopyUrl(slotProps.row.mirror_token)"> 复制</t-link>
-          </template>
-        </t-table>
+        <user-chatgpt-details-component ref="userChatgptDetailsRef" />
       </t-dialog>
 
       <!-- 添加/编辑 用户 dialog -->
@@ -121,6 +104,18 @@
             <t-switch v-model="newUser.isolated_session" :custom-value="[true, false]" />
           </t-form-item>
 
+          <t-form-item label="过期日期" name="expired_date">
+            <t-date-picker
+              v-model="newUser.expired_date"
+              placeholder=""
+              :disable-date="{
+                before: dayjs().subtract(0, 'day').format(),
+              }"
+              clearable
+              allow-input
+            />
+          </t-form-item>
+
           <t-form-item label="选择 ChatGPT" name="gptcar_list">
             <t-space>
               <t-radio-group v-model="isGptcarListEmpty" class="side-mode-radio">
@@ -145,8 +140,8 @@
             <t-space direction="vertical">
               <t-switch
                 v-model="hasModelLimit"
-                @change="(value) => onModelLimitChange(value as boolean)"
                 :custom-value="[true, false]"
+                @change="(value) => onModelLimitChange(value as boolean)"
               />
               <div v-if="hasModelLimit">
                 <t-space direction="vertical" :size="3">
@@ -223,8 +218,8 @@
             <t-space direction="vertical">
               <t-switch
                 v-model="hasModelLimit"
-                @change="(value) => onModelLimitChange(value as boolean)"
                 :custom-value="[true, false]"
+                @change="(value) => onModelLimitChange(value as boolean)"
               />
               <div v-if="hasModelLimit">
                 <t-space direction="vertical" :size="3">
@@ -286,20 +281,20 @@
 </template>
 
 <script setup lang="ts">
+import dayjs from 'dayjs';
 import { AddIcon, DeleteIcon, UserCircleIcon } from 'tdesign-icons-vue-next';
 import { CustomValidator, FormProps, MessagePlugin, TableProps } from 'tdesign-vue-next';
 import { ref } from 'vue';
 
 import RequestApi from '@/api/request';
 
+import UserChatgptDetailsComponent from './user_chatgpt.vue';
+
+const userChatgptDetailsRef = ref<typeof UserChatgptDetailsComponent | null>(null);
+
 interface TableData {
   token: string;
   user_info: string;
-}
-
-interface TableChatgptDetailsData {
-  mirror_token: string;
-  chatgpt_username: string;
 }
 
 const isGptcarListEmpty = ref(true);
@@ -308,10 +303,8 @@ const actionType = ref('add');
 const loading = ref(false);
 const tableLoading = ref(false);
 const tableData = ref<TableData[]>([]);
-const tableChatgptDetailsData = ref<TableChatgptDetailsData[]>([]);
 const gptCarList = ref<any>([]);
 const showDialog = ref(false);
-const showChatGPTDetailsDialog = ref(false);
 const showModelLimitDialog = ref(false);
 const showDeleteDialog = ref(false);
 const usernameDelete = ref('');
@@ -321,6 +314,7 @@ const UserAccountUri = '/0x/user/';
 const BatchModelLimitUri = '/0x/user/batch-model-limit';
 const GptCarEnumUri = '/0x/chatgpt/car-enum';
 const selectedRowKeys = ref<TableProps['selectedRowKeys']>([]);
+const showChatGPTDetailsDialog = ref(false);
 
 interface TokenUserForm {
   is_active: boolean;
@@ -331,6 +325,7 @@ interface TokenUserForm {
   remark: string;
   model_limit: any[];
   gptcar_list: any[];
+  expired_date: any;
 }
 
 const pagination = {
@@ -345,12 +340,6 @@ const rehandlePageChange = (curr: any) => {
   getUserList();
 };
 
-const handleCopyUrl = (mirrorToken: string) => {
-  const notLoginUrl = `${window.location.origin}/api/not-login?user_gateway_token=${mirrorToken}`;
-  navigator.clipboard.writeText(notLoginUrl);
-  MessagePlugin.success('复制成功');
-};
-
 const BatcModelLimit = async () => {
   showModelLimitDialog.value = true;
 };
@@ -358,13 +347,6 @@ const onSelectChange: TableProps['onSelectChange'] = (value, _) => {
   selectedRowKeys.value = value;
   // console.log(value, _);
 };
-
-const columnsChatgptDetails: TableProps['columns'] = [
-  { colKey: 'chatgpt_username', title: 'ChatGPT', width: 80 },
-  { colKey: 'auth_status', title: '状态', width: 30 },
-  { colKey: 'mirror_token', title: 'Mirror Token (用于 API, 该token不会变更)', width: 100 },
-  { colKey: 'op', title: '免登链接', width: 30 },
-];
 
 const columns: TableProps['columns'] = [
   { colKey: 'row-select', type: 'multiple', checkProps: ({ row }) => ({ disabled: row.username === 'free_account' }) },
@@ -374,6 +356,7 @@ const columns: TableProps['columns'] = [
   { colKey: 'chatgpt_count', title: 'ChatGPT', width: 120 },
   { colKey: 'use_count', title: '当日用量', width: 100 },
   { colKey: 'last_login', title: '最近登录时间', width: 160 },
+  { colKey: 'expired_date', title: '过期日期', width: 160 },
   { colKey: 'date_joined', title: '注册时间', width: 160 },
   { colKey: 'remark', title: '备注', width: 200 },
   { width: 200, colKey: 'op', title: '操作' },
@@ -412,7 +395,9 @@ const modelList = [
   { label: 'GPT-4o', value: 'gpt-4o' },
   { label: 'GPT-4o-mini', value: 'gpt-4o-mini' },
   { label: 'o1-mini', value: 'o1-mini' },
-  { label: 'o1-preview', value: 'o1-preview' },
+  { label: 'o1', value: 'o1' },
+  { label: 'o1-pro', value: 'o1-pro' },
+
 ];
 
 const defaultUser = {
@@ -424,6 +409,7 @@ const defaultUser = {
   remark: '',
   model_limit: [] as any[],
   gptcar_list: [] as any[],
+  expired_date: undefined as Date | undefined,
 };
 
 const batchModelLimitUser = ref(JSON.parse(JSON.stringify({ model_limit: defaultUser.model_limit })));
@@ -489,6 +475,8 @@ const addOrUpdateUser = async () => {
   if (isGptcarListEmpty.value) {
     newUser.value.gptcar_list = [];
   }
+
+  newUser.value.expired_date = newUser.value.expired_date || null;
   const response = await RequestApi(UserAccountUri, 'POST', newUser.value);
 
   const data = await response.json();
@@ -524,17 +512,6 @@ const batchUpdateUserModelLimit = async () => {
     showModelLimitDialog.value = false;
     MessagePlugin.success('限制成功');
   }
-};
-
-const getChatGPTDetails = async (user: any) => {
-  showChatGPTDetailsDialog.value = true;
-  tableLoading.value = true;
-  const GptDetailsUri = `/0x/user/get-mirror-token?user_id=${user.id}`;
-  const response = await RequestApi(GptDetailsUri);
-  const data = await response.json();
-  tableChatgptDetailsData.value = data;
-  tableLoading.value = false;
-  console.log(data);
 };
 
 const handleEdit = async (user: TokenUserForm) => {
@@ -605,6 +582,11 @@ const onModelLimitChange = (value: boolean) => {
     batchModelLimitUser.value.model_limit = [];
   }
   console.log('onModelLimitChange', value);
+};
+
+const getChatGPTDetails = async (user: any) => {
+  showChatGPTDetailsDialog.value = true;
+  userChatgptDetailsRef.value.getChatGPTDetails(user);
 };
 
 getUserList();

@@ -7,7 +7,7 @@ chatgpt.com
 正在验证您是否是真人。这可能需要几秒钟时间。
 ```
 
-### 以下三个个方案，多试试，总有一个方案适合你
+### 以下三个方案，多试试，总有一个方案适合你
 
 ### 方案一. 更换服务器 IP 解决（简单方便）
 [腾讯云](https://curl.qcloud.com/0JAXkoF1) 选择欧美区域
@@ -24,18 +24,11 @@ docker compose -f docker-compose-warp.yml up
 curl -s --socks5-hostname 127.0.0.1:1080 https://cloudflare.com/cdn-cgi/trace |grep warp
 ```
 
-##### 设置warp代理，并启动程序
-```bash
-vi .env
-
-PROXY_URL_POOL=socks5://warp:1080
-
-./deploy.sh
-```
 查看代理配置是否有效
 
 ```bash
-curl  http://127.0.0.1:50002/api/check-proxy?admin_password=环境变量中的ADMIN_PASSWORD
+浏览器访问
+http://你的域名/api/check-proxy?admin_password=环境变量中的ADMIN_PASSWORD
 
 ```
 
@@ -48,11 +41,12 @@ vi .env
 
 # 多个代理地址，用逗号隔开
 
-PROXY_URL_POOL=http://username@password@ip:port,socks5://username@password@ip:port
+PROXY_URL_POOL=http://username:password@ip:port,socks5://username:password@ip:port,socks5h://username:password@ip:port
 
 ./deploy.sh
 ```
 查看代理配置是否有效（同warp验证流程）
+
 
 --- 
 
